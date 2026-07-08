@@ -1,4 +1,6 @@
-FROM astral/uv:python3.12-bookworm-slim
+FROM python:3.14-trixie
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ENV UV_DEFAULT_INDEX=https://mirrors.aliyun.com/pypi/simple/
 
