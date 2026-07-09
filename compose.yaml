@@ -4,3 +4,26 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: "P9vL7q"
+    depends_on:
+      - db
+  db:
+    image: postgres:18.4
+    restart: unless-stopped
+    # set shared memory limit when using docker compose
+    shm_size: 128mb
+    # or set shared memory limit when deploy via swarm stack
+    #volumes:
+    #  - type: tmpfs
+    #    target: /dev/shm
+    #    tmpfs:
+    #      size: 134217728 # 128*2^20 bytes = 128Mb
+    environment:
+      POSTGRES_PASSWORD: "P9vL7q"
+    ports:
+      - "5432:5432"
+    volumes:
+      - blog_postgres_data:/var/lib/postgresql
+volumes:
+  blog_postgres_data:
