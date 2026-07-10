@@ -134,7 +134,7 @@ def update_user(
 
     db.commit()
     db.refresh(user)
-    return userss
+    return user
 
 
 @app.delete("/api/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
