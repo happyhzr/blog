@@ -39,7 +39,8 @@ app.include_router(posts.router, prefix="/api/posts", tags=["posts"])
 @app.get("/", include_in_schema=False, name="home")
 @app.get("/posts", include_in_schema=False, name="posts")
 async def home(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.Post).options(selectinload(models.Post.author)))
+    result = await db.execute(
+        select(models.Post).options(selectinload(models.Post.author)).order_by(models.Post.date_posted.desc()))
     posts = result.scalars().all()
     return templates.TemplateResponse(
         request,
@@ -69,7 +70,8 @@ async def user_posts_page(
         user_id: int,
         db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    result = await db.execute(
+        select(models.User).where(models.User.id == user_id))
     user = result.scalars().first()
     if not user:
         raise HTTPException(
@@ -78,7 +80,8 @@ async def user_posts_page(
         )
 
     result = await db.execute(
-        select(models.Post).options(selectinload(models.Post.author)).where(models.Post.user_id == user_id))
+        select(models.Post).options(selectinload(models.Post.author)).where(models.Post.user_id == user_id).order_by(
+            models.Post.date_posted.desc()))
     posts = result.scalars().all()
     return templates.TemplateResponse(
         request,
@@ -110,22 +113,6 @@ async def create_post(post: PostCreate, db: Annotated[AsyncSession, Depends(get_
     await db.commit()
     await db.refresh(new_post, attribute_names=["author"])
     return new_post
-
-
-@app.get("/api/users/{user_id}/posts", response_model=list[PostResponse])
-async def get_user_posts(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.User).where(models.User.id == user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    result = await db.execute(
-        select(models.Post).options(selectinload(models.Post.author)).where(models.Post.user_id == user_id))
-    posts = result.scalars().all()
-    return posts
 
 
 @app.exception_handler(StarletteHTTPException)

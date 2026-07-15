@@ -3,10 +3,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 import models
 from database import get_db
-from schemas import UserCreate, UserResponse, UserUpdate
+from schemas import UserCreate, UserResponse, UserUpdate, PostResponse
 
 router = APIRouter()
 
@@ -97,3 +98,20 @@ async def delete_user(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]
 
     await db.delete(user)
     await db.commit()
+
+
+@router.get("/{user_id}/posts", response_model=list[PostResponse])
+async def get_user_posts(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    result = await db.execute(
+        select(models.Post).options(selectinload(models.Post.author)).where(models.Post.user_id == user_id).order_by(
+            models.Post.date_posted.desc()))
+    posts = result.scalars().all()
+    return posts
