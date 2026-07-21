@@ -77,7 +77,7 @@ async def update_post_partial(post_id: int, post_data: PostUpdate, current_user:
 
 
 @router.post(
-    "/api/posts",
+    "",
     response_model=PostResponse,
     status_code=status.HTTP_201_CREATED,
 )
