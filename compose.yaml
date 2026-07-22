@@ -8,6 +8,8 @@ services:
       POSTGRES_PASSWORD: "P9vL7q"
     depends_on:
       - db
+    volumes:
+      - blog_pics_data:/app/media/profile_pics
   db:
     image: postgres:18.4
     restart: unless-stopped
@@ -27,3 +29,4 @@ services:
       - blog_postgres_data:/var/lib/postgresql
 volumes:
   blog_postgres_data:
+  blog_pics_data:
