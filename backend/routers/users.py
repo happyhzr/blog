@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,7 @@ from PIL import UnidentifiedImageError
 
 import models
 from database import get_db
-from schemas import UserCreate, UserPublic, UserUpdate, PostResponse, UserPrivate, Token
+from schemas import UserCreate, UserPublic, UserUpdate, PostResponse, UserPrivate, Token, PaginatedPostsResponse
 
 from datetime import timedelta
 
@@ -151,23 +151,6 @@ async def delete_user(user_id: int, current_user: CurrentUser, db: Annotated[Asy
         delete_profile_image(old_filename)
 
 
-@router.get("/{user_id}/posts", response_model=list[PostResponse])
-async def get_user_posts(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.User).where(models.User.id == user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    result = await db.execute(
-        select(models.Post).options(selectinload(models.Post.author)).where(models.Post.user_id == user_id).order_by(
-            models.Post.date_posted.desc()))
-    posts = result.scalars().all()
-    return posts
-
-
 @router.patch("/{user_id}/picture", response_model=UserPrivate)
 async def upload_profile_picture(
         user_id: int,
@@ -236,3 +219,46 @@ async def delete_user_picture(
     delete_profile_image(old_filename)
 
     return current_user
+
+
+@router.get("/{user_id}/posts", response_model=PaginatedPostsResponse)
+async def get_user_posts(
+        user_id: int,
+        db: Annotated[AsyncSession, Depends(get_db)],
+        skip: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=100)] = 10,
+):
+    result = await db.execute(select(models.User).where(models.User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(models.Post)
+        .where(models.Post.user_id == user_id),
+    )
+    total = count_result.scalar() or 0
+
+    result = await db.execute(
+        select(models.Post)
+        .options(selectinload(models.Post.author))
+        .where(models.Post.user_id == user_id)
+        .order_by(models.Post.date_posted.desc())
+        .offset(skip)
+        .limit(limit),
+    )
+    posts = result.scalars().all()
+
+    has_more = skip + len(posts) < total
+
+    return PaginatedPostsResponse(
+        posts=[PostResponse.model_validate(post) for post in posts],
+        total=total,
+        skip=skip,
+        limit=limit,
+        has_more=has_more,
+    )
