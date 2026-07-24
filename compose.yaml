@@ -5,11 +5,11 @@ services:
       - "8000:8000"
     restart: unless-stopped
     environment:
-      POSTGRES_PASSWORD: "P9vL7q"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     depends_on:
       - db
     volumes:
-      - blog_pics_data:/app/media/profile_pics
+      - pics_data:/app/media/profile_pics
   db:
     image: postgres:18.4
     restart: unless-stopped
@@ -22,11 +22,11 @@ services:
     #    tmpfs:
     #      size: 134217728 # 128*2^20 bytes = 128Mb
     environment:
-      POSTGRES_PASSWORD: "P9vL7q"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
-      - blog_postgres_data:/var/lib/postgresql
+      - postgres_data:/var/lib/postgresql
 volumes:
-  blog_postgres_data:
-  blog_pics_data:
+  postgres_data:
+  pics_data:

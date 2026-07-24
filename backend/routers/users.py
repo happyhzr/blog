@@ -1,8 +1,9 @@
 from typing import Annotated
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, Query, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.concurrency import run_in_threadpool
@@ -10,13 +11,13 @@ from PIL import UnidentifiedImageError
 
 import models
 from database import get_db
-from schemas import UserCreate, UserPublic, UserUpdate, PostResponse, UserPrivate, Token, PaginatedPostsResponse
-
-from datetime import timedelta
-
-from auth import create_access_token, hash_password, verify_password, CurrentUser
+from schemas import UserCreate, UserPublic, UserUpdate, PostResponse, UserPrivate, Token, PaginatedPostsResponse, \
+    ChangePasswordRequest, ForgotPasswordRequest, ResetPasswordRequest
+from auth import create_access_token, hash_password, verify_password, CurrentUser, generate_reset_token, \
+    hash_reset_token
 from config import settings
 from image_utils import process_profile_image, delete_profile_image
+from email_utils import send_password_reset_email
 
 router = APIRouter()
 
@@ -262,3 +263,49 @@ async def get_user_posts(
         limit=limit,
         has_more=has_more,
     )
+
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+async def forgot_password(
+        request_data: ForgotPasswordRequest,
+        background_tasks: BackgroundTasks,
+        db: Annotated[AsyncSession, Depends(get_db)],
+):
+    result = await db.execute(
+        select(models.User).where(
+            func.lower(models.User.email) == request_data.email.lower(),
+        ),
+    )
+    user = result.scalars().first()
+
+    if user:
+        await db.execute(
+            sql_delete(models.PasswordResetToken).where(
+                models.PasswordResetToken.user_id == user.id,
+            ),
+        )
+
+        token = generate_reset_token()
+        token_hash = hash_reset_token(token)
+        expires_at = datetime.now(UTC) + timedelta(
+            minutes=settings.reset_token_expire_minutes
+        )
+
+        reset_token = models.PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+        db.add(reset_token)
+        await db.commit()
+
+        background_tasks.add_task(
+            send_password_reset_email,
+            to_email=user.email,
+            username=user.username,
+            token=token,
+        )
+
+    return {
+        "message": "If an account exists with this email, you will receive password reset instructions."
+    }
